@@ -114,7 +114,7 @@
         # web / wasm
         zig
         nodejs
-        python3
+        (python3.withPackages (ps: with ps; [pygame]))
         inotify-tools
         moreutils
         # native overlay (GTK4 + layer-shell)
