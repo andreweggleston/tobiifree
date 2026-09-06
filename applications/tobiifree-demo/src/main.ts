@@ -32,6 +32,7 @@ const daGrid = $<HTMLDivElement>('da-grid');
 const rectGrid = $<HTMLDivElement>('rect-grid');
 const daReload = $<HTMLButtonElement>('da-reload');
 const daReset = $<HTMLButtonElement>('da-reset');
+const daExport = $<HTMLButtonElement>('da-export');
 const daDiag = $<HTMLButtonElement>('da-diag');
 const diagOut = $<HTMLPreElement>('diag-out');
 const daCal = $<HTMLButtonElement>('da-cal');
@@ -772,6 +773,59 @@ daReload.addEventListener('click', async () => {
 daReset.addEventListener('click', () => {
   setFormValues(DEFAULT_AREA);
   void writeDisplayArea();
+});
+
+// ---------- Export ~/.config/tobii.json ----------
+// Inverts the rect+tilt → corners mapping used by tobiifreed/overlay
+// (driver/src/tracker.zig setDisplayArea):
+//   bl = (ox, oy, z)
+//   tl = (ox, oy + h·cos(tilt), z + h·sin(tilt))
+//   tr = tl + (w, 0, 0)
+// with ox = -cx - w/2 and oy = -cy - h/2 (config cx/cy are the tracker's
+// position relative to screen center).
+function cornersToTobiiConfig(area: DisplayArea) {
+  const w = area.tr.x - area.tl.x;
+  const h = Math.hypot(area.tl.y - area.bl.y, area.tl.z - area.bl.z);
+  const tilt = Math.atan2(area.tl.z - area.bl.z, area.tl.y - area.bl.y) * (180 / Math.PI);
+  const r = (v: number) => Math.round(v * 10) / 10;
+  return {
+    display_area: {
+      w_mm: r(w),
+      h_mm: r(h),
+      z_mm: r(area.bl.z),
+      tilt: r(tilt),
+      cx: r(-area.bl.x - w / 2),
+      cy: r(-area.bl.y - h / 2),
+    },
+  };
+}
+
+daExport.addEventListener('click', () => {
+  const area = readForm();
+  // The config format can only express the locked rectangular plane;
+  // measure how far the corners deviate from those constraints.
+  const skew = Math.max(
+    Math.abs(area.bl.x - area.tl.x),
+    Math.abs(area.tr.y - area.tl.y),
+    Math.abs(area.tr.z - area.tl.z),
+  );
+  const json = JSON.stringify(cornersToTobiiConfig(area), null, 2) + '\n';
+
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'tobii.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  if (navigator.clipboard) void navigator.clipboard.writeText(json).catch(() => {});
+
+  diagOut.textContent =
+    (skew > 1
+      ? `warning: corners deviate ${skew.toFixed(1)}mm from a rectangular plane; ` +
+        `export assumes the locked-plane constraints\n\n`
+      : '') +
+    `${json}\ndownloaded tobii.json (also copied to clipboard) — ` +
+    `move it to ~/.config/tobii.json, then restart tobiifreed / the overlay`;
 });
 
 // ---------- Diagnostic: does display_area affect 3D fields? ----------

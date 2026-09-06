@@ -27,7 +27,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   renderer.setClearColor(0x0b0b0f, 1);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0b0b0f, 800, 2400);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 10, 5000);
   // Initial framing: slightly above and behind the tracker, looking at
